@@ -1,10 +1,8 @@
 // use core::time;
-use std::time::Duration;
-
-use iced::widget::container::background;
-use iced::widget::shader::wgpu::Color;
+// use iced::widget::container::background;
+// use iced::widget::shader::wgpu::Color;
 use iced::widget::{button, center, text, column, row, mouse_area};
-use iced::{time, Element, Subscription, Theme};
+use iced::{Element, Subscription, Theme};
 
 mod automata;
 mod consts;
@@ -13,6 +11,7 @@ use consts::{INIT_GRID_X, INIT_GRID_Y, INIT_CELL_SIZE};
 
 
 struct State {
+    cell_size: u16,
     grid: Vec<Vec<u8>>,
     running: bool,
     rules: Rules3x3,
@@ -24,25 +23,27 @@ impl Default for State {
             // grid: vec![vec![0;INIT_GRID_SIZE];INIT_GRID_SIZE],
             grid: DEFAULT_GRID(),
             running: false,
-            rules: DEF_RULES_LIFE()
+            rules: DEF_RULES_LIFE(),
+            cell_size: INIT_CELL_SIZE,
         }
     }
 }
 
 fn run_ca(state: &mut State) {
-    let rules = automata::DEF_RULES_LIFE();
-
-    automata::ca(&mut state.grid, &rules);
+    automata::ca(&mut state.grid, &state.rules);
 }
 
 pub fn main() -> iced::Result {
     // let mut grid = [[0; INIT_GRID_SIZE]; INIT_GRID_SIZE];
+    
+    let r1 = 10 % 3;
+    let r2 = 10 / 3;
+    println!("{r1}");
+    println!("{r2}");
 
-    // grid[6][6] = 1;
-    // println!("{:#?}", grid);
 
-    // iced::run("A cool counter", update, view)
     iced::application("A cool application", update, view)
+        .subscription(|_state| iced::event::listen().map(Message::Event))
         .subscription(sub_time)
         .theme(theme)
         .run()
@@ -50,7 +51,45 @@ pub fn main() -> iced::Result {
 
 fn update(state: &mut State, message: Message) {
     match message {
-        // Message::Increment => ,
+        // Global
+        Message::Event(event) => match event {
+            iced::event::Event::Mouse(mouse_event) => match mouse_event {
+                iced::mouse::Event::WheelScrolled { delta } => {
+                    println!("scrolled");
+                    match delta {
+                        iced::mouse::ScrollDelta::Lines { x, .. } => {
+                            if x > 0.0 {
+                                state.cell_size += 1;
+                            }
+                            else {
+                                state.cell_size -= 1;
+                            }
+                        },
+                        iced::mouse::ScrollDelta::Pixels { x, .. } => {
+                            if x > 0.0 {
+                                state.cell_size += 1;
+                            }
+                            else {
+                                state.cell_size -= 1;
+                            }
+                        }
+                    }
+                },
+                _ => {
+                    println!("other mouse event");
+                }
+            },
+            // iced::event::Event::Keyboard(keyboard_event) => match keyboard_event {
+            //     iced::keyboard::Event::KeyReleased { key, .. } => {
+            //         println!("Key {:?} was pressed", key);
+            //     }
+            //     _ => {}
+            // },
+            _ => {
+                println!("other event");
+            }
+        },
+        // Local
         Message::CellClicked(x, y) => {
             print!("Clicked {} {}", x, y);
             state.grid[x as usize][y as usize] = 1;
@@ -73,7 +112,7 @@ fn update(state: &mut State, message: Message) {
 }
 
 fn view(state: &State) -> Element<Message> {
-    let b_size = INIT_CELL_SIZE;
+    let b_size = state.cell_size;
 
     //
     // Create the cell matrix
@@ -136,6 +175,9 @@ fn view(state: &State) -> Element<Message> {
 
 #[derive(Debug, Clone)]
 enum Message {
+    // Global
+    Event(iced::event::Event),
+    // Local
     CellClicked(u64, u64),
     CellRightClicked(u64, u64),
     PlayPause(),
@@ -143,11 +185,11 @@ enum Message {
     Tick(),
 }
 
-fn theme(state: &State) -> Theme {
+fn theme(_state: &State) -> Theme {
     Theme::TokyoNight
 }
 
-fn sub_time(state: &State) -> Subscription<Message> {
+fn sub_time(_state: &State) -> Subscription<Message> {
     iced::time::every(std::time::Duration::new(0, 10000000)).map(|_id| { 
         Message::Tick()
     })
