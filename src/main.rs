@@ -1,13 +1,14 @@
 // use core::time;
 // use iced::widget::container::background;
 // use iced::widget::shader::wgpu::Color;
-use iced::widget::{button, center, text, column, row, mouse_area};
+use iced::widget::{button, center, column, mouse_area, row, text, scrollable, Space};
+use iced::Length::{Fill, Shrink};
 use iced::{Element, Subscription, Theme};
 
 mod automata;
 mod consts;
 use automata::{Rules3x3, DEFAULT_GRID, DEF_RULES_LIFE};
-use consts::{INIT_GRID_X, INIT_GRID_Y, INIT_CELL_SIZE};
+use consts::{INIT_GRID_X, INIT_GRID_Y, INIT_CELL_SIZE, INIT_TICK_SPEED_MS};
 
 
 struct State {
@@ -43,7 +44,7 @@ pub fn main() -> iced::Result {
 
 
     iced::application("A cool application", update, view)
-        .subscription(|_state| iced::event::listen().map(Message::Event))
+        // .subscription(|_state| iced::event::listen().map(Message::Event))
         .subscription(sub_time)
         .theme(theme)
         .run()
@@ -52,43 +53,43 @@ pub fn main() -> iced::Result {
 fn update(state: &mut State, message: Message) {
     match message {
         // Global
-        Message::Event(event) => match event {
-            iced::event::Event::Mouse(mouse_event) => match mouse_event {
-                iced::mouse::Event::WheelScrolled { delta } => {
-                    println!("scrolled");
-                    match delta {
-                        iced::mouse::ScrollDelta::Lines { x, .. } => {
-                            if x > 0.0 {
-                                state.cell_size += 1;
-                            }
-                            else {
-                                state.cell_size -= 1;
-                            }
-                        },
-                        iced::mouse::ScrollDelta::Pixels { x, .. } => {
-                            if x > 0.0 {
-                                state.cell_size += 1;
-                            }
-                            else {
-                                state.cell_size -= 1;
-                            }
-                        }
-                    }
-                },
-                _ => {
-                    println!("other mouse event");
-                }
-            },
-            // iced::event::Event::Keyboard(keyboard_event) => match keyboard_event {
-            //     iced::keyboard::Event::KeyReleased { key, .. } => {
-            //         println!("Key {:?} was pressed", key);
-            //     }
-            //     _ => {}
-            // },
-            _ => {
-                println!("other event");
-            }
-        },
+        // Message::Event(event) => match event {
+        //     iced::event::Event::Mouse(mouse_event) => match mouse_event {
+        //         iced::mouse::Event::WheelScrolled { delta } => {
+        //             println!("scrolled");
+        //             match delta {
+        //                 iced::mouse::ScrollDelta::Lines { x, .. } => {
+        //                     if x > 0.0 {
+        //                         state.cell_size += 1;
+        //                     }
+        //                     else {
+        //                         state.cell_size -= 1;
+        //                     }
+        //                 },
+        //                 iced::mouse::ScrollDelta::Pixels { x, .. } => {
+        //                     if x > 0.0 {
+        //                         state.cell_size += 1;
+        //                     }
+        //                     else {
+        //                         state.cell_size -= 1;
+        //                     }
+        //                 }
+        //             }
+        //         },
+        //         _ => {
+        //             println!("other mouse event");
+        //         }
+        //     },
+        //     iced::event::Event::Keyboard(keyboard_event) => match keyboard_event {
+        //         iced::keyboard::Event::KeyReleased { key, .. } => {
+        //             println!("Key {:?} was pressed", key);
+        //         }
+        //         _ => {}
+        //     },
+        //     _ => {
+        //         println!("other event");
+        //     }
+        // },
         // Local
         Message::CellClicked(x, y) => {
             print!("Clicked {} {}", x, y);
@@ -96,6 +97,10 @@ fn update(state: &mut State, message: Message) {
         }
         Message::CellRightClicked(x, y) => {
             state.grid[x as usize][y as usize] = 0;
+        }
+        Message::CellScrolled(delta) => {
+            println!("{delta}");
+            state.cell_size = state.cell_size.saturating_add_signed(delta.into());
         }
         Message::PlayPause() => {
             state.running = !state.running;
@@ -150,6 +155,17 @@ fn view(state: &State) -> Element<Message> {
                         .width(b_size)
                         .height(b_size)
                 )
+                .on_scroll(|delta| Message::CellScrolled(
+                    match delta {
+                        iced::mouse::ScrollDelta::Lines { y, .. } => {
+                            if y > 0.0 { 1 } else { -1 }
+                        },
+                        iced::mouse::ScrollDelta::Pixels { y, .. } => {
+                            if y > 0.0 { 1 } else { -1 }
+                        }
+                    }
+                ))
+
                 // On cell right click
                 .on_right_press(Message::CellRightClicked(y.try_into().unwrap(), x.try_into().unwrap()));
 
@@ -159,7 +175,7 @@ fn view(state: &State) -> Element<Message> {
     }
 
     //
-    // Add other UI
+    // Add buttons
     //
     let ca_container = row![
         h_box,
@@ -169,17 +185,94 @@ fn view(state: &State) -> Element<Message> {
         button( "step" )
             .on_press(Message::Step())
     ];
+    
+    //
+    // Rules display
+    //
+    let mut rules_container_dead = row![];
+    let mut rules_container_alive = row![];
 
-    ca_container.into()
+    for rule in &state.rules.rules {
+        let rule = rule.rule;
+
+        let mut grid_3x3 = row!();
+        for x in 0..3 {
+            let mut v_box = column!();
+            for y in 0..3 {
+                // Cell
+                // a button inside a mouse area
+                let b = button(text(" "))
+                    .width(INIT_CELL_SIZE)
+                    .height(INIT_CELL_SIZE)
+                    .style( move |_, status| {
+                        // Style the button
+                        match status {
+                            // button::Status::Hovered => {
+                            //     button::Style::default().with_background(iced::Color::from_rgb(0.5, 0.5, 0.5))
+                            // }
+                            _ => if rule[y][x] == 0 {
+                                button::Style::default().with_background(iced::Color::BLACK)
+                            }
+                            else {
+                                button::Style::default().with_background(iced::Color::WHITE)
+                            }
+                        }
+                    });
+                    // On cell left click
+                    // .on_press(
+                    //     Message::CellClicked(y.try_into().unwrap(), x.try_into().unwrap())
+                    // );
+
+                v_box = v_box.push(b);
+            }
+            grid_3x3 = grid_3x3.push(v_box);
+        }
+        if rule[1][1] == 0 {
+            rules_container_dead = rules_container_dead.push(grid_3x3).push(Space::with_width(4));
+        } else {
+            rules_container_alive = rules_container_alive.push(grid_3x3).push(Space::with_width(4));
+        }
+    }
+
+
+    let app_container = column![
+        ca_container,
+        Space::with_height(10),
+        // dead -> alive
+        scrollable(rules_container_dead)
+                .direction(scrollable::Direction::Horizontal(
+                            scrollable::Scrollbar::new()
+                                .width(2)
+                                .margin(2)
+                                .scroller_width(6)
+                                .anchor(scrollable::Anchor::Start),
+                        ))
+                .width(Fill)
+                .height(INIT_CELL_SIZE * 5),
+        // living -> dead
+        scrollable(rules_container_alive)
+                .direction(scrollable::Direction::Horizontal(
+                            scrollable::Scrollbar::new()
+                                .width(2)
+                                .margin(2)
+                                .scroller_width(6)
+                                .anchor(scrollable::Anchor::Start),
+                        ))
+                .width(Fill)
+                .height(INIT_CELL_SIZE * 5)
+    ];
+
+    app_container.into()
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     // Global
-    Event(iced::event::Event),
+    // Event(iced::event::Event),
     // Local
     CellClicked(u64, u64),
     CellRightClicked(u64, u64),
+    CellScrolled(i8),
     PlayPause(),
     Step(),
     Tick(),
@@ -190,7 +283,8 @@ fn theme(_state: &State) -> Theme {
 }
 
 fn sub_time(_state: &State) -> Subscription<Message> {
-    iced::time::every(std::time::Duration::new(0, 10000000)).map(|_id| { 
+    // 100000000 = 100ms
+    iced::time::every(std::time::Duration::new(0, INIT_TICK_SPEED_MS * 1000 * 1000)).map(|_id| { 
         Message::Tick()
     })
 }

@@ -1,13 +1,14 @@
+use std::collections::HashSet;
 use super::consts::{INIT_GRID_X, INIT_GRID_Y};
 
 
 pub struct Rule3 {
-    rule: [[u8; 3]; 3],
+    pub rule: [[u8; 3]; 3],
     result: u8
 }
 
 pub struct Rules3x3 {
-    rules: Vec<Rule3>
+    pub rules: Vec<Rule3>
 }
 
 fn generate_rules_neighbours(n_alive: Vec<u8>, n_dead: Vec<u8>) -> Rules3x3 {
@@ -17,14 +18,38 @@ fn generate_rules_neighbours(n_alive: Vec<u8>, n_dead: Vec<u8>) -> Rules3x3 {
         [0, 0, 0],
     ];
 
-    let found_rules: Vec<Rule3> = get_all_rules3().iter().map(|r| Rule3{rule: *r, result: 1}).collect();
+    // let all_rules: Vec<Rule3> = get_all_rules3().iter().map(|r| Rule3{rule: *r, result: 1}).collect();
+    let all_rules: Vec<[[u8; 3]; 3]> = get_all_rules3().iter().map(|r| *r).collect();
+    let mut filtered_rules: Vec<Rule3> = vec![];
 
-    Rules3x3{rules: found_rules}
+    for mut found_rule in all_rules {
+        if found_rule[1][1] != 0 {
+            continue
+        }
+        // [1][1] == 0
+        let mut num = 0;
+        for found_rule_row in found_rule {
+            for found_rule_cell in found_rule_row {
+                if found_rule_cell != 0 {
+                    num += 1;
+                }
+            }
+        }
+
+        if n_alive.contains(&num) {
+            filtered_rules.push( Rule3{rule: found_rule, result: 1} );
+        }
+
+        if n_dead.contains(&num) {
+            found_rule[1][1] = 1;
+            filtered_rules.push( Rule3{rule: found_rule, result: 0} );
+        }
+    }
+
+    Rules3x3{rules: filtered_rules}
 }
 
-fn get_all_rules3() -> Vec<[[u8; 3]; 3]> {
-    // let mut all_rules: Vec<[[u8; 3]; 3]> = vec![];
-
+fn get_all_rules3() -> HashSet<[[u8; 3]; 3]> {
     let prev_rule = [
         [0, 0, 0],
         [0, 0, 0],
@@ -36,14 +61,16 @@ fn get_all_rules3() -> Vec<[[u8; 3]; 3]> {
     all_rules
 }
 
-// fn recur_get_rules(mut all_rules: Vec<[[u8; 3]; 3]>, prev_rule: &[[u8; 3]; 3], idx: usize)
 fn recur_get_rules(prev_rule: &[[u8; 3]; 3], idx: usize)
--> Vec<[[u8; 3]; 3]> {
+-> HashSet<[[u8; 3]; 3]> {
     if idx > 8 {
-        return vec![]
+        // Insert first (all zeroes) rule
+        let mut hs = HashSet::new();
+        hs.insert(*prev_rule);
+        return hs
     }
 
-    // idx 0-8
+    // Get x,y position in 3x3 grid (from idx 0-8)
     let idx_x: usize = idx % 3;
     let idx_y: usize = idx / 3;
 
@@ -53,12 +80,9 @@ fn recur_get_rules(prev_rule: &[[u8; 3]; 3], idx: usize)
     let mut res1 = recur_get_rules(&prev_rule, idx+1);
     let res2 = recur_get_rules(&prev_rule_alive, idx+1);
 
-    res1.push(prev_rule_alive);
-
-    // println!("{prev_rule:?}");
-    // println!("{prev_rule_alive:?}");
-
+    res1.insert(prev_rule_alive);
     res1.extend(res2);
+
     return res1
 }
 
@@ -82,11 +106,10 @@ pub fn DEF_RULES_LIFE() -> Rules3x3 {
     //     },
     // ];
     
-    let rules: Vec<Rule3> = vec![ ];
+    // let rules: Vec<Rule3> = vec![ ];
+    // Rules3x3{rules}
 
-    generate_rules_neighbours(vec![3,4], vec![1,2,5,6,7,8]);
-
-    Rules3x3{rules}
+    generate_rules_neighbours(vec![3], vec![0, 1, 4, 5, 6, 7, 8])
 }
 
 pub fn DEFAULT_GRID() -> Vec<Vec<u8>> {
@@ -156,8 +179,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        // let result = generate_rules_neighbours(vec![3,4], vec![1,2,5,6,7,8]);
+    fn test_all_rules() {
+        let prev_rule = [
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+        ];
+
+        let all_rules = recur_get_rules(&prev_rule, 0);
+
+        let ar_len = all_rules.len();
+        println!("{all_rules:#?}");
+        println!("{ar_len}");
+        assert_eq!(ar_len, 512);
+    }
+
+    #[test]
+    fn test_CA_GOL() {
+        let result = generate_rules_neighbours(vec![3], vec![0, 1, 4, 5, 6, 7, 8]);
 
         let prev_rule = [
             [0, 0, 0],
@@ -170,8 +209,9 @@ mod tests {
         // let r: Vec<[[u8; 3]; 3]> = 
         //         all_rules.rules.iter().map(|rule3| rule3.rule.clone()).collect();
 
-        println!("{all_rules:?}");
-        println!("{all_rules.len()}");
+        let ar_len = all_rules.len();
+        println!("{all_rules:#?}");
+        println!("{ar_len}");
         // assert_eq!(result, 4);
     }
 }
