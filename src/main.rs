@@ -1,13 +1,13 @@
 // use core::time;
 // use iced::widget::container::background;
 // use iced::widget::shader::wgpu::Color;
-use iced::widget::{button, center, column, mouse_area, row, text, scrollable, Space};
+use iced::widget::{button, center, column, mouse_area, row, text, scrollable, Space, Row};
 use iced::Length::{Fill, Shrink};
 use iced::{Element, Subscription, Theme};
 
 mod automata;
 mod consts;
-use automata::{Rules3x3, DEFAULT_GRID, DEF_RULES_LIFE};
+use automata::{Rules3x3, DEFAULT_GRID, DEF_RULES_LIFE, RAND_RULES};
 use consts::{INIT_GRID_X, INIT_GRID_Y, INIT_CELL_SIZE, INIT_TICK_SPEED_MS};
 
 
@@ -24,7 +24,8 @@ impl Default for State {
             // grid: vec![vec![0;INIT_GRID_SIZE];INIT_GRID_SIZE],
             grid: DEFAULT_GRID(),
             running: false,
-            rules: DEF_RULES_LIFE(),
+            // rules: DEF_RULES_LIFE(),
+            rules: RAND_RULES(),
             cell_size: INIT_CELL_SIZE,
         }
     }
@@ -119,6 +120,8 @@ fn update(state: &mut State, message: Message) {
 fn view(state: &State) -> Element<Message> {
     let b_size = state.cell_size;
 
+    let mut app_container = column!();
+
     //
     // Create the cell matrix
     //
@@ -185,84 +188,75 @@ fn view(state: &State) -> Element<Message> {
         button( "step" )
             .on_press(Message::Step())
     ];
+
+    app_container = app_container.push(ca_container);
+    app_container = app_container.push(Space::with_height(10));
     
     //
     // Rules display
     //
-    let mut rules_container_dead = row![];
-    let mut rules_container_alive = row![];
+    for rules_type in &state.rules.rules_by_type {
+        let mut rules_container = row!();
 
-    for rule in &state.rules.rules {
-        let rule = rule.rule;
+        for rule in rules_type {
+            // Each cell state has own container of transitions
+            let rule = rule.rule;
 
-        let mut grid_3x3 = row!();
-        for x in 0..3 {
-            let mut v_box = column!();
-            for y in 0..3 {
-                // Cell
-                // a button inside a mouse area
-                let b = button(text(" "))
-                    .width(INIT_CELL_SIZE)
-                    .height(INIT_CELL_SIZE)
-                    .style( move |_, status| {
-                        // Style the button
-                        match status {
-                            // button::Status::Hovered => {
-                            //     button::Style::default().with_background(iced::Color::from_rgb(0.5, 0.5, 0.5))
-                            // }
-                            _ => if rule[y][x] == 0 {
-                                button::Style::default().with_background(iced::Color::BLACK)
+            let mut grid_3x3 = row!();
+            for x in 0..3 {
+                let mut v_box = column!();
+                for y in 0..3 {
+                    // Cell
+                    // a button inside a mouse area
+                    let b = button(text(" "))
+                        .width(INIT_CELL_SIZE)
+                        .height(INIT_CELL_SIZE)
+                        .style( move |_, status| {
+                            // Style the button
+                            match status {
+                                // button::Status::Hovered => {
+                                //     button::Style::default().with_background(iced::Color::from_rgb(0.5, 0.5, 0.5))
+                                // }
+                                _ => if rule[y][x] == 0 {
+                                    button::Style::default().with_background(iced::Color::BLACK)
+                                }
+                                else {
+                                    button::Style::default().with_background(iced::Color::WHITE)
+                                }
                             }
-                            else {
-                                button::Style::default().with_background(iced::Color::WHITE)
-                            }
-                        }
-                    });
+                        });
                     // On cell left click
                     // .on_press(
                     //     Message::CellClicked(y.try_into().unwrap(), x.try_into().unwrap())
                     // );
 
-                v_box = v_box.push(b);
+                    v_box = v_box.push(b);
+                }
+                grid_3x3 = grid_3x3.push(v_box);
             }
-            grid_3x3 = grid_3x3.push(v_box);
-        }
-        if rule[1][1] == 0 {
-            rules_container_dead = rules_container_dead.push(grid_3x3).push(Space::with_width(4));
-        } else {
-            rules_container_alive = rules_container_alive.push(grid_3x3).push(Space::with_width(4));
-        }
-    }
 
+            // Push the 3x3 grid into the corresponding container
+            rules_container = rules_container.push(grid_3x3).push(Space::with_width(4));
+        }
 
-    let app_container = column![
-        ca_container,
-        Space::with_height(10),
-        // dead -> alive
-        scrollable(rules_container_dead)
+        app_container = app_container.push(
+            scrollable(rules_container)
                 .direction(scrollable::Direction::Horizontal(
-                            scrollable::Scrollbar::new()
-                                .width(2)
-                                .margin(2)
-                                .scroller_width(6)
-                                .anchor(scrollable::Anchor::Start),
-                        ))
+                    scrollable::Scrollbar::new()
+                        .width(2)
+                        .margin(2)
+                        .scroller_width(6)
+                        .anchor(scrollable::Anchor::Start),
+                ))
                 .width(Fill)
                 .height(INIT_CELL_SIZE * 5),
-        // living -> dead
-        scrollable(rules_container_alive)
-                .direction(scrollable::Direction::Horizontal(
-                            scrollable::Scrollbar::new()
-                                .width(2)
-                                .margin(2)
-                                .scroller_width(6)
-                                .anchor(scrollable::Anchor::Start),
-                        ))
-                .width(Fill)
-                .height(INIT_CELL_SIZE * 5)
-    ];
+        );
+    }
+
+    // rules_containers[idx] = rules_containers[idx]
 
     app_container.into()
+    // app_container.into()
 }
 
 #[derive(Debug, Clone)]
